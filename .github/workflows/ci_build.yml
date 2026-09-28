@@ -1,0 +1,144 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: InLong Build
+
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: macos-latest
+          arch: arm64
+          runner: macos-latest
+          expander_leg: macos-latest--arm64
+    name: Build [${{ matrix.expander_leg }}]
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+      # Release space size
+    - name: Remove unnecessary packages
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        echo "=== Before pruning ==="
+        df -h
+        echo "Listing 100 largest packages"
+        dpkg-query -Wf '${Installed-Size}\t${Package}\n' | sort -n | tail -n 100
+        df -h
+        echo "Removing large packages"
+        echo "Removing mongodb-.* packages..."
+        sudo apt-get remove -y '^mongodb-.*'
+        echo "Removed mongodb-.* packages..."
+        df -h
+        sudo apt-get remove -y azure-cli google-chrome-stable google-cloud-cli microsoft-edge-stable firefox powershell mono-devel libgl1-mesa-dri
+        df -h
+        echo "Removing large directories"
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/graalvm/
+        sudo rm -rf /usr/local/.ghcup/
+        sudo rm -rf /usr/local/share/powershell
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/local/lib/node_modules
+        sudo rm -rf /opt/hostedtoolcache
+        echo
+        echo "=== After pruning ==="
+        df -h
+
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: 8
+        distribution: adopt
+          # No vendor ships a JDK 8 for Windows on arm64; use the x64 JDK, which
+          # Windows 11 on ARM runs natively through its x64 emulation layer.
+        architecture: ${{ (matrix.os == 'windows-latest' && matrix.arch == 
+          'arm64') && 'x64' || '' }}
+
+    - name: Cache Maven packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.m2/repository/*/*/*
+          !~/.m2/repository/org/apache/inlong
+          !~/.m2/repository/com/github/eirslett
+        key: ${{ runner.os }}-inlong-build-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-inlong-build
+
+    - name: Build with Maven
+      run: |
+        mvn -B -U -ntp -e -V -T 1C clean install -pl '!inlong-distribution' -am -DskipTests -Dspotbugs.skip=true  -Dlicense.skip=true -Dcheckstyle.skip=true -Drat.skip=true -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.httpconnectionManager.ttlSeconds=120 -Daether.connector.http.reuseConnections=false -Daether.connector.requestTimeout=60000
+        mvn install -pl inlong-distribution -am -DskipTests -Dspotbugs.skip=true  -Dlicense.skip=true  -Dcheckstyle.skip=true  -Drat.skip=true
+      env:
+        CI: false
+
+    - name: Get InLong version
+      if: ${{ success() }}
+      run: |
+        version=`mvn -Dexec.executable='echo' -Dexec.args='${project.version}' --non-recursive exec:exec -q`
+        echo "VERSION=${version}" >> $GITHUB_ENV
+
+    - name: Upload binary package
+      if: ${{ success() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: apache-inlong-${{ env.VERSION }}-bin.tar.gz
+        path: ./inlong-distribution/target/apache-inlong-${{ env.VERSION 
+          }}-bin.tar.gz
+
+    - name: Upload sort connectors package for flink v1.13
+      if: ${{ success() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: apache-inlong-${{ env.VERSION 
+          }}-sort-connectors-flink-v1.13.tar.gz
+        path: ./inlong-distribution/target/apache-inlong-${{ env.VERSION 
+          }}-sort-connectors-flink-v1.13.tar.gz
+
+    - name: Upload sort connectors package for flink v1.15
+      if: ${{ success() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: apache-inlong-${{ env.VERSION 
+          }}-sort-connectors-flink-v1.15.tar.gz
+        path: ./inlong-distribution/target/apache-inlong-${{ env.VERSION 
+          }}-sort-connectors-flink-v1.15.tar.gz
+
+    - name: Upload sort connectors package for flink v1.18
+      if: ${{ success() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: apache-inlong-${{ env.VERSION 
+          }}-sort-connectors-flink-v1.18.tar.gz
+        path: ./inlong-distribution/target/apache-inlong-${{ env.VERSION 
+          }}-sort-connectors-flink-v1.18.tar.gz
+
+    - name: Clean up build packages
+      run: mvn clean
+    timeout-minutes: 150
