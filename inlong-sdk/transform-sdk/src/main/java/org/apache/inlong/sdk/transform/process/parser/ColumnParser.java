@@ -1,0 +1,71 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.inlong.sdk.transform.process.parser;
+
+import org.apache.inlong.sdk.transform.decode.SourceData;
+import org.apache.inlong.sdk.transform.process.Context;
+
+import net.sf.jsqlparser.expression.Function;
+import net.sf.jsqlparser.schema.Column;
+
+/**
+ * ColumnParser
+ * 
+ */
+@TransformParser(values = Column.class)
+public class ColumnParser implements ValueParser {
+
+    private final String fieldName;
+
+    public ColumnParser(Column expr) {
+        this.fieldName = this.formatFieldName(expr.toString());
+    }
+
+    public ColumnParser(Function expr) {
+        this.fieldName = this.formatFieldName(expr.toString());
+    }
+
+    private String formatFieldName(String rawFieldName) {
+        String tmpFieldName = rawFieldName;
+        if (tmpFieldName.startsWith("`")) {
+            tmpFieldName = tmpFieldName.substring(1);
+        }
+        if (tmpFieldName.endsWith("`")) {
+            tmpFieldName = tmpFieldName.substring(0, tmpFieldName.length() - 1);
+        }
+        return tmpFieldName;
+    }
+    /**
+     * parse
+     * @param sourceData
+     * @param rowIndex
+     * @return
+     */
+    @Override
+    public Object parse(SourceData sourceData, int rowIndex, Context context) {
+        return sourceData.getField(rowIndex, fieldName);
+    }
+
+    /**
+     * get fieldName
+     * @return the fieldName
+     */
+    public String getFieldName() {
+        return fieldName;
+    }
+}

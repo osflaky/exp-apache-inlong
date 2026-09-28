@@ -1,0 +1,47 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.inlong.sdk.transform.decode;
+
+import org.apache.inlong.sdk.transform.process.Context;
+
+/**
+ * AbstractSourceData
+ * 
+ */
+public abstract class AbstractSourceData implements SourceData {
+
+    public static final String CTX_KEY = "$ctx.";
+
+    protected Context context;
+
+    public boolean isContextField(String fieldName) {
+        return fieldName.startsWith(CTX_KEY);
+    }
+
+    public String getContextField(String fieldName) {
+        if (context == null) {
+            return "";
+        }
+        if (!isContextField(fieldName)) {
+            return null;
+        }
+        String realFieldName = fieldName.substring(CTX_KEY.length());
+        String fieldValue = this.context.getStringOrDefault(realFieldName, "");
+        return fieldValue;
+    }
+}
